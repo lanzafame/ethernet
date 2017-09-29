@@ -23,6 +23,7 @@ const etherType = 0xcccc
 func main() {
 	var (
 		ifaceFlag = flag.String("i", "", "network interface to use to send and receive messages")
+		vlanFlag  = flag.Uint("v", 0, "vlan to add to etherecho packets")
 		msgFlag   = flag.String("m", "", "message to be sent (default: system's hostname)")
 	)
 
@@ -49,8 +50,10 @@ func main() {
 		}
 	}
 
+	vlan := &ethernet.VLAN{ID: uint16(*vlanFlag)}
+
 	// Send messages in one goroutine, receive messages in another.
-	go sendMessages(c, ifi.HardwareAddr, msg)
+	go sendMessages(c, ifi.HardwareAddr, vlan, msg)
 	go receiveMessages(c, ifi.MTU)
 
 	// Block forever.
@@ -59,11 +62,12 @@ func main() {
 
 // sendMessages continuously sends a message over a connection at regular intervals,
 // sourced from specified hardware address.
-func sendMessages(c net.PacketConn, source net.HardwareAddr, msg string) {
+func sendMessages(c net.PacketConn, source net.HardwareAddr, vlan *ethernet.VLAN, msg string) {
 	// Message is broadcast to all machines in same network segment.
 	f := &ethernet.Frame{
 		Destination: ethernet.Broadcast,
 		Source:      source,
+		VLAN:        vlan,
 		EtherType:   etherType,
 		Payload:     []byte(msg),
 	}
@@ -107,6 +111,6 @@ func receiveMessages(c net.PacketConn, mtu int) {
 		}
 
 		// Display source of message and message itself.
-		log.Printf("[%s] %s", addr.String(), string(f.Payload))
+		log.Printf("[%s] %#v: %s", addr.String(), f, string(f.Payload))
 	}
 }
